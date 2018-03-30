@@ -1,0 +1,174 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Medieval House</title>
+
+    <script src="http://threejs.org/build/three.js"></script>
+    <script src="js/OBJLoader.js"></script>`
+    <script src="js/controls.js"></script>
+    <style media="screen">
+        body {
+            overflow: hidden;
+        }
+
+        pre {
+            display: none;
+        }
+
+        #container {
+            width: 500px;
+            height: 500px;
+        }
+    </style>
+</head>
+
+<body>
+    <section id='container'>
+    </section>
+
+
+    <script id='vertexShader' type='x-shader/x-vertex'>
+        varying vec2 vUv;
+        varying vec3 normalInterp;
+        varying vec3 vertPos;
+
+        void main() {
+            vUv = uv;
+
+            vec4 vertPos4 = modelViewMatrix * vec4(position, 1.0);
+            vertPos = vec3(vertPos4) / vertPos4.w;
+            normalInterp = normalMatrix * normal;
+
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    </script>
+
+    <script id='fragmentShader' type='x-shader/x-fragment'>
+        // Inputs        
+        uniform sampler2D uTexture;
+        uniform sampler2D uNormal;
+        uniform sampler2D uSpec;
+
+        varying vec2 vUv;
+        varying vec3 normalInterp;
+        varying vec3 vertPos;
+
+        // Constants
+        const vec3 lightPos 	= vec3(200,60,100);
+        const vec3 ambientColor = vec3(0.1, .1, .1);
+        const vec3 specColor 	= vec3(1.0, 1.0, 1.0);
+
+        // Function for calculating normal maps
+        vec3 perturbNormal( vec3 eye_pos, vec3 surf_norm, vec2 uv_coords, vec3 normal_perturbation ) {
+            vec3 q0 = dFdx( eye_pos.xyz );
+            vec3 q1 = dFdy( eye_pos.xyz );
+            vec2 st0 = dFdx( uv_coords.st );
+            vec2 st1 = dFdy( uv_coords.st );
+
+            vec3 S = normalize( q0 * st1.t - q1 * st0.t );
+            vec3 T = normalize( -q0 * st1.s + q1 * st0.s );
+            vec3 N = normalize( surf_norm );
+
+            mat3 tsn = mat3( S, T, N );
+            return normalize( tsn * normal_perturbation );
+        }
+    
+        void main() {
+            vec3 mapN = texture2D( uNormal, vUv ).xyz * 2.0 - 1.0;
+            vec3 normal = normalize(normalInterp);
+            normal = perturbNormal(vertPos, normal, vUv, mapN);
+
+            vec3 lightDir = normalize(lightPos - vertPos);
+
+            float lambertian = max(dot(lightDir,normal), 0.0);
+            float specular = 0.0;
+        
+            if(lambertian > 0.0) {
+
+                // Calculate fresnel value 
+
+                vec3 viewDir = normalize(-vertPos);
+                vec3 halfDir = normalize(lightDir + viewDir);
+                float specAngle = max(dot(halfDir, normal), 0.0);
+                specular = pow(specAngle, 16.0);
+            }
+
+            vec3 diffuseColor = texture2D(uTexture, vUv).rgb;
+
+            vec3 specularColor = texture2D(uSpec, vUv).rgb;
+            specular = specular * (specularColor.r +specularColor.g +specularColor.b) / 3.0 ;
+
+            gl_FragColor = vec4(ambientColor + lambertian * diffuseColor + specular * specColor, 1.0);
+        }
+    
+    </script>
+
+    <script>
+        var container, camera, scene, renderer, uniforms;
+
+        init();
+        animate();
+        function init() {
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
+            camera.position.z = 500;
+            controls = new THREE.OrbitControls(camera);
+            scene = new THREE.Scene();
+
+            uniforms = {
+                uTexture: { type: "t", value: THREE.ImageUtils.loadTexture("textures/house-diffuse.png") },
+                uNormal: { type: "t", value: THREE.ImageUtils.loadTexture("textures/house-normal.png") },
+                uSpec: { type: "t", value: THREE.ImageUtils.loadTexture("textures/house-spec.png") }
+            };
+
+            uniforms.uTexture.value.wrapS = uniforms.uTexture.value.wrapT = THREE.RepeatWrapping;
+            var material = new THREE.ShaderMaterial({
+                uniforms: uniforms,
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent,
+                extensions: {
+                    derivatives: true,
+                }
+            });
+
+            var loader = new THREE.OBJLoader();
+            loader.load('models/house.obj', function (object) {
+                object.traverse(function (child) {
+                    if (child instanceof THREE.Mesh) {
+                        child.material = material;
+                    }
+                });
+                object.position.y = -100;
+                scene.add(object);
+                onWindowResize();
+            });
+
+            renderer = new THREE.WebGLRenderer({ antialias: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            container = document.getElementById('container');
+            container.appendChild(renderer.domElement);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            render();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            render();
+        }
+
+        function render() {
+            renderer.render(scene, camera);
+        }
+
+    </script>
+</body>
+
+</html>

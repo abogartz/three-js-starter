@@ -1,0 +1,126 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Hot Lava</title>
+
+    <script src="http://threejs.org/build/three.js"></script>
+    <script src="js/OBJLoader.js"></script>`
+    <script src="js/controls.js"></script>
+    <style media="screen">
+        body {
+            overflow: hidden;
+        }
+
+        pre {
+            display: none;
+        }
+
+        #container {
+            width: 500px;
+            height: 500px;
+        }
+    </style>
+</head>
+
+<body>
+    <section id='container'>
+    </section>
+    <script id='vertexShader' type='x-shader/x-vertex'>
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = vec4( position, 1.0 );
+        }
+        
+        </script>
+    <script id='fragmentShader' type='x-shader/x-fragment'>
+    
+        uniform vec2 uResolution;
+        uniform float uTime;
+
+        uniform sampler2D uLavaTexture;
+        
+        varying vec2 vUv;
+        
+        void main() {
+             vec2 st = gl_FragCoord.xy/uResolution.xy;
+             vec4 backgroundColor = vec4(0.0);
+             vec2 p = -1.0 + 2.0 * vUv;
+             float radius = sqrt(dot(p,p));
+             if (radius < 1.0)
+             {
+               vec2 uv;
+               float f = (1.0-sqrt(1.0-radius))/(radius);
+               uv.x = p.x*f + uTime * 0.08;
+               uv.y = p.y*f+ uTime * 0.08;
+               gl_FragColor = texture2D(uLavaTexture,uv);
+             }
+             else
+             {
+               gl_FragColor = backgroundColor;
+             }
+        }
+        
+    </script>
+    <script>
+        var container, camera, scene, renderer, uniforms;
+        init();
+        animate();
+        function init() {
+            container = document.getElementById('container');
+            camera = new THREE.Camera();
+            camera.position.z = 1;
+            scene = new THREE.Scene();
+
+            var geometry = new THREE.PlaneBufferGeometry(2, 2);
+            uniforms = {
+                uTime: { type: "f", value: 1.0 },
+                u_mouse: { type: "v2", value: new THREE.Vector2(0.5, 0.5) },
+                uResolution: { type: "v2", value: new THREE.Vector2() },
+                uLavaTexture: { type: "t", value: THREE.ImageUtils.loadTexture("textures/lava.jpg") }
+            };
+            uniforms.uLavaTexture.value.wrapS = uniforms.uLavaTexture.value.wrapT = THREE.RepeatWrapping;
+
+            var material = new THREE.ShaderMaterial({
+                uniforms: uniforms,
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent
+            });
+
+            var mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+            renderer = new THREE.WebGLRenderer();
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            onWindowResize();
+            window.addEventListener('resize', onWindowResize, false);
+            window.addEventListener('mousemove', onMouseMove, false);
+        }
+        function onMouseMove(event) {
+            uniforms.u_mouse.value.x = (event.pageX + 50) / renderer.domElement.width;
+            uniforms.u_mouse.value.y = 1 - (event.pageY / renderer.domElement.height);
+        }
+
+        function onWindowResize(event) {
+            renderer.setSize(Math.min(window.innerWidth, window.innerHeight) - 50, Math.min(window.innerWidth, window.innerHeight) - 50);
+            uniforms.uResolution.value.x = renderer.domElement.width;
+            uniforms.uResolution.value.y = renderer.domElement.height;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            render();
+        }
+
+        function render() {
+            uniforms.uTime.value += 0.02;
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+
+</html>
