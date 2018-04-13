@@ -80,7 +80,7 @@
             vec3 normal = normalize(normalInterp);
             vec3 viewDir = normalize(-vertPos);
             
-            vec3 n1 = texture2D(uNormal1,   vUv).xyz * vec3( 2,  2, 2) + vec3(-1, -1,  0);
+            vec3 n1 = texture2D(uNormal1,vUv * 5.).xyz * vec3( 2,  2, 2) + vec3(-1, -1,  0);
             vec3 n2 = texture2D(uNormal2, fract(vUv * 10. )).xyz*vec3(-2, -2, 2) + vec3( 1,  1, -1);
             vec3 n  = n1*dot(n1, n2)/n1.z - n2;
             normal = perturbNormal(vertPos, normal, vUv, n);
@@ -107,7 +107,7 @@
                 specular = specular * (specularColor.r +specularColor.g +specularColor.b) / 3.0 ;
             }
 
-            vec3 diffuseColor = texture2D(uTexture, fract(vUv * 10.)).rgb * vec3(1.0, .5, .5);
+            vec3 diffuseColor = texture2D(uTexture, fract(vUv * 10.)).rgb * vec3(1.0, 0.6, .2);
             gl_FragColor = vec4(ambientColor + lambertian * diffuseColor + specular, 1.0);
         }
     
@@ -126,12 +126,15 @@
 
             uniforms = {
                 uTexture: { type: "t", value: THREE.ImageUtils.loadTexture("textures/mesh-diffuse.png") },
-                uNormal1: { type: "t", value: THREE.ImageUtils.loadTexture("textures/box-normal2.png") },
+                uNormal1: { type: "t", value: THREE.ImageUtils.loadTexture("textures/box-normal.jpg") },
                 uNormal2: { type: "t", value: THREE.ImageUtils.loadTexture("textures/mesh-normal.png") },
                 uSpec: { type: "t", value: THREE.ImageUtils.loadTexture("textures/mesh-spec.png") }
             };
 
             uniforms.uTexture.value.wrapS = uniforms.uTexture.value.wrapT = THREE.RepeatWrapping;
+            uniforms.uNormal1.value.wrapS = uniforms.uNormal1.value.wrapT = THREE.RepeatWrapping;
+            uniforms.uNormal2.value.wrapS = uniforms.uNormal2.value.wrapT = THREE.RepeatWrapping;
+            uniforms.uSpec.value.wrapS = uniforms.uSpec.value.wrapT = THREE.RepeatWrapping;
             var material = new THREE.ShaderMaterial({
                 uniforms: uniforms,
                 vertexShader: document.getElementById('vertexShader').textContent,
@@ -141,17 +144,9 @@
                 }
             });
 
-            var loader = new THREE.OBJLoader();
-            loader.load('models/cube.obj', function (object) {
-                object.traverse(function (child) {
-                    if (child instanceof THREE.Mesh) {
-                        child.material = material;
-                    }
-                });
-                object.position.y = 0;
-                scene.add(object);
-                onWindowResize();
-            });
+            var geometry = new THREE.SphereGeometry(3, 50, 50, 0, Math.PI * 2, 0, Math.PI * 2);
+            var sphere = new THREE.Mesh(geometry, material);
+            scene.add(sphere);
 
             renderer = new THREE.WebGLRenderer({ antialias: false });
             renderer.setSize(window.innerWidth, window.innerHeight);
