@@ -7,7 +7,7 @@ https://nodejs.org/en/download/
 
 Run the code:
 
-`npm install -g simple-autoreload-server`
+`sudo npm install -g simple-autoreload-server`
 
 `autoreload-server -w "**/**.{html,css,js}" ./ 8008`
 
