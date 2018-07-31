@@ -40,13 +40,12 @@
     </script>
 
     <script id='fragmentShader' type='x-shader/x-fragment'>
-        uniform float u_time;
         uniform sampler2D uTexture;
         varying vec2 vUv;
-        varying vec3 projTextCoord;
     
         void main() {
           gl_FragColor = texture2D(uTexture, vUv);
+          // gl_FragColor = vec4(1.0);
         }
     
     </script>

@@ -1,0 +1,138 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Hot Lava</title>
+
+    <script src="http://threejs.org/build/three.js"></script>
+    <script src="js/OBJLoader.js"></script>`
+    <script src="js/controls.js"></script>
+    <style media="screen">
+        body {
+            overflow: hidden;
+            background-color: blue;
+        }
+
+        pre {
+            display: none;
+        }
+
+        #container {
+            width: 500px;
+            height: 500px;
+        }
+    </style>
+</head>
+
+<body>
+    <section id='container'>
+    </section>
+    <script id='vertexShader' type='x-shader/x-vertex'>
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = vec4( position, 1.0 );
+        }
+
+
+        
+        </script>
+    <script id='fragmentShader' type='x-shader/x-fragment'>
+        #define PI 3.1415926535897932384626433832795
+    
+        uniform vec2 uResolution;
+        uniform bool u_repeat;
+        uniform vec2 u_scale;
+        uniform vec2 u_offset;
+        uniform float u_rotation;
+
+        uniform sampler2D uGraphicTexture;
+        
+        varying vec2 vUv;
+
+        float getRadians( float degrees ) {
+            // Return the Radians from the input degress.
+            return (degrees * PI) / 180.0;
+          }         
+
+        void main() {
+             vec2 st = gl_FragCoord.xy/uResolution.xy;  
+             vec4 graphicTexture; 
+             vec2 graphicUVs = vUv;
+             float radians = getRadians(u_rotation);
+             float sine = sin(radians), cosine = cos(radians);
+             graphicUVs += vec2 (.5 - u_offset.x, 0.5 - u_offset.y);
+             graphicUVs -= 0.5;
+             graphicUVs *= mat2(cosine, sine, -sine, cosine);
+             graphicUVs /= u_scale;
+             graphicUVs += 0.5;
+             if (u_repeat == false && (graphicUVs.x < 0.0 || graphicUVs.x > 1.0 || graphicUVs.y < 0.0 || graphicUVs.y > 1.0)) {
+                graphicTexture = vec4(1.0, 1.0, 0.0, 0.0);
+              } else {
+                graphicTexture = texture2D(uGraphicTexture,graphicUVs);
+              }       
+              if (graphicTexture.a < 0.1) {
+                  discard;
+              }
+             gl_FragColor = graphicTexture;
+        }
+        
+    </script>
+    <script>
+        var container, camera, scene, renderer, uniforms;
+        init();
+        animate();
+        function init() {
+            container = document.getElementById('container');
+            camera = new THREE.Camera();
+            camera.position.z = 1;
+            scene = new THREE.Scene();
+
+            var geometry = new THREE.PlaneBufferGeometry(2, 2);
+            uniforms = {
+                u_offset: { type: "v2", value: new THREE.Vector2(0.5, 0.135) },
+                u_scale: { type: "v2", value: new THREE.Vector2(.2, .1) },
+                u_repeat: { type: "bool", value: true },
+                u_rotation: { type: "f", value: 315 },
+                uResolution: { type: "v2", value: new THREE.Vector2() },
+                uGraphicTexture: { type: "t", value: THREE.ImageUtils.loadTexture("textures/square-graphic.png") }
+            };
+            uniforms.uGraphicTexture.value.wrapS = uniforms.uGraphicTexture.value.wrapT = THREE.RepeatWrapping;
+
+            var material = new THREE.ShaderMaterial({
+                uniforms: uniforms,
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent
+            });
+
+            var mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+            renderer = new THREE.WebGLRenderer({ alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setClearColor(0xffffff, 0);
+            container.appendChild(renderer.domElement);
+
+            onWindowResize();
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function onWindowResize(event) {
+            renderer.setSize(Math.min(window.innerWidth, window.innerHeight) - 50, Math.min(window.innerWidth, window.innerHeight) - 50);
+            uniforms.uResolution.value.x = renderer.domElement.width;
+            uniforms.uResolution.value.y = renderer.domElement.height;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            render();
+        }
+
+        function render() {
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+
+</html>

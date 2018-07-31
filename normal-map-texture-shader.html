@@ -84,8 +84,8 @@
             vec3 lightDir = normalize(lightPos - vertPos);
 
             float lambertian = max(dot(lightDir,normal), 0.0);
-            float specular = 0.0;
-        
+
+            float specular = 0.0;        
             if(lambertian > 0.0) {
 
                 // Calculate fresnel value 
@@ -99,8 +99,7 @@
             vec3 diffuseColor = texture2D(uTexture, vUv).rgb;
 
             vec3 specularColor = texture2D(uSpec, vUv).rgb;
-            specular = specular * (specularColor.r +specularColor.g +specularColor.b) / 3.0 ;
-
+            specular = specular * (specularColor.r +specularColor.g +specularColor.b) / 3.0;
             gl_FragColor = vec4(ambientColor + lambertian * diffuseColor + specular * specColor, 1.0);
         }
     

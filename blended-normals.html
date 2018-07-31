@@ -51,6 +51,7 @@
         uniform sampler2D uNormal1;
         uniform sampler2D uNormal2;
         uniform sampler2D uSpec;
+        uniform sampler2D uDecal;
 
         varying vec2 vUv;
         varying vec3 normalInterp;
@@ -75,14 +76,40 @@
             mat3 tsn = mat3( S, T, N );
             return normalize( tsn * normal_perturbation );
         }
-    
+
+        vec3 blend_rnm_unpacked(vec3 n1, vec3 n2)
+        {
+            vec3 t = n1.xyz + vec3( 0.0,  0.0, 1.0);
+            vec3 u = n2.xyz * vec3(-1.0, -1.0, 1.0);
+            vec3 r = (t/t.z) * dot(t, u) - u;
+
+            return r;
+        }
+        vec3 blend_unity(vec3 n1, vec3 n2) {
+            mat3 nBasis = mat3(
+                vec3(n1.z, n1.y, -n1.x), // +90 degree rotation around y axis
+                vec3(n1.x, n1.z, -n1.y), // -90 degree rotation around x axis
+                vec3(n1.x, n1.y,  n1.z));
+            return normalize(n2.x*nBasis[0] + n2.y*nBasis[1] + n2.z*nBasis[2]);
+        }
         void main() {
             vec3 normal = normalize(normalInterp);
             vec3 viewDir = normalize(-vertPos);
-            
-            vec3 n1 = texture2D(uNormal1,vUv * 5.).xyz * vec3( 2,  2, 2) + vec3(-1, -1,  0);
-            vec3 n2 = texture2D(uNormal2, fract(vUv * 10. )).xyz*vec3(-2, -2, 2) + vec3( 1,  1, -1);
-            vec3 n  = n1*dot(n1, n2)/n1.z - n2;
+            vec3 n;
+            vec3 n1 = texture2D(uNormal1,vUv * 5.).xyz;
+            vec3 n2 = texture2D(uNormal2, fract(vUv * 10. )).xyz;
+            vec2 decalUvs = vUv * 10.5;
+            decalUvs = vec2(decalUvs - vec2(0.1, 0.1));
+            vec3 n3 = texture2D(uDecal, decalUvs).xyz;
+            // n = blend_rnm_unpacked(n3 * vec3( 2,  2, 2) + vec3(-1, -1,  0), n1 * vec3(2, 2, 2) + vec3( -1,  -1, 0));
+            n = blend_unity(n1, n2);///blend_rnm_unpacked(n1 * vec3( 2,  2, 2) + vec3(-1, -1,  0), n2 * vec3(2, 2, 2) + vec3( 1,  1, 0));
+          //  if (decalUvs.x < 0.0 || decalUvs.x > 1.0 || decalUvs.y < 0.0 || decalUvs.y > 1.0) {
+               // n = blend_rnm_unpacked(n, n2);
+           // } else {
+               //  n = blend_rnm_unpacked(n1, n2);
+           // }
+           n = blend_unity(n1.xyz*vec3( 2,  2, 2) + vec3(-1, -1,  0), n2.xyz * vec3(2, 2, 2) + vec3( -1,  -1, 0));
+           n = blend_unity(n, n3.xyz * vec3(2, 2, 2) + vec3( -1,  -1, 0));
             normal = perturbNormal(vertPos, normal, vUv, n);
 
             vec3 lightDir = normalize(lightPos - vertPos);
@@ -109,6 +136,7 @@
 
             vec3 diffuseColor = texture2D(uTexture, fract(vUv * 10.)).rgb * vec3(1.0, 0.6, .2);
             gl_FragColor = vec4(ambientColor + lambertian * diffuseColor + specular, 1.0);
+            //gl_FragColor = vec4(vec3(lambertian), 1.0);
         }
     
     </script>
@@ -128,13 +156,15 @@
                 uTexture: { type: "t", value: THREE.ImageUtils.loadTexture("textures/mesh-diffuse.png") },
                 uNormal1: { type: "t", value: THREE.ImageUtils.loadTexture("textures/box-normal.jpg") },
                 uNormal2: { type: "t", value: THREE.ImageUtils.loadTexture("textures/mesh-normal.png") },
-                uSpec: { type: "t", value: THREE.ImageUtils.loadTexture("textures/mesh-spec.png") }
+                uSpec: { type: "t", value: THREE.ImageUtils.loadTexture("textures/mesh-spec.png") },
+                uDecal: { type: "t", value: THREE.ImageUtils.loadTexture("textures/square-graphic-normal.png") }
             };
 
             uniforms.uTexture.value.wrapS = uniforms.uTexture.value.wrapT = THREE.RepeatWrapping;
             uniforms.uNormal1.value.wrapS = uniforms.uNormal1.value.wrapT = THREE.RepeatWrapping;
             uniforms.uNormal2.value.wrapS = uniforms.uNormal2.value.wrapT = THREE.RepeatWrapping;
             uniforms.uSpec.value.wrapS = uniforms.uSpec.value.wrapT = THREE.RepeatWrapping;
+            uniforms.uDecal.value.wrapS = uniforms.uDecal.value.wrapT = THREE.RepeatWrapping;
             var material = new THREE.ShaderMaterial({
                 uniforms: uniforms,
                 vertexShader: document.getElementById('vertexShader').textContent,
