@@ -1,0 +1,186 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>PBR Shader</title>
+
+    <script src="http://threejs.org/build/three.js"></script>
+    <script src="js/OBJLoader.js"></script>
+    `
+    <script src="js/controls.js"></script>
+    <style media="screen">
+      body {
+        overflow: hidden;
+      }
+
+      pre {
+        display: none;
+      }
+
+      #container {
+        width: 500px;
+        height: 500px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <section id="container"></section>
+    <script>
+      var container, camera, scene, renderer, uniforms;
+
+      // This is a basic asyncronous shader loader for THREE.js.
+      function ShaderLoader(
+        vertex_url,
+        fragment_url,
+        onLoad,
+        onProgress,
+        onError
+      ) {
+        var vertex_loader = new THREE.XHRLoader(THREE.DefaultLoadingManager);
+        vertex_loader.setResponseType("text");
+        vertex_loader.load(
+          vertex_url,
+          function(vertex_text) {
+            var fragment_loader = new THREE.XHRLoader(
+              THREE.DefaultLoadingManager
+            );
+            fragment_loader.setResponseType("text");
+            fragment_loader.load(fragment_url, function(fragment_text) {
+              onLoad(vertex_text, fragment_text);
+            });
+          },
+          onProgress,
+          onError
+        );
+      }
+
+      ShaderLoader(
+        "shaders/vertexShaderPBR.glsl",
+        "shaders/fragmentShaderPBR.glsl",
+        (vert, frag) => {
+          init(vert, frag);
+          animate();
+        },
+        (vert, frag) => {
+          console.log(vert);
+        },
+        (vert, frag) => {
+          console.log(vert);
+        }
+      );
+      function init(vert, frag) {
+        camera = new THREE.PerspectiveCamera(
+          60,
+          window.innerWidth / window.innerHeight,
+          1,
+          10000
+        );
+        camera.position.z = 70;
+        camera.position.y = 35;
+        controls = new THREE.OrbitControls(camera);
+        scene = new THREE.Scene();
+        var loader = new THREE.CubeTextureLoader();
+        loader.setPath("./");
+
+        var textureCube = loader.load([
+          "textures/environment/environment_right_0.jpg",
+          "textures/environment/environment_left_0.jpg",
+          "textures/environment/environment_top_0.jpg",
+          "textures/environment/environment_bottom_0.jpg",
+          "textures/environment/environment_front_0.jpg",
+          "textures/environment/environment_back_0.jpg"
+        ]);
+
+        uniforms = {
+          u_BaseColorSampler: {
+            type: "t",
+            value: THREE.ImageUtils.loadTexture(
+              "textures/helmet/Mandalorian_Helmet_BaseColorBlue.png"
+            )
+          },
+          u_MetallicRoughnessSampler: {
+            type: "t",
+            value: THREE.ImageUtils.loadTexture(
+              "textures/helmet/Mandalorian_Helmet_Roughness.png"
+            )
+          },
+          u_MetalnessSampler: {
+            type: "t",
+            value: THREE.ImageUtils.loadTexture(
+              "textures/helmet/Mandalorian_Helmet_Metallic.png"
+            )
+          },
+          u_NormalSampler: {
+            type: "t",
+            value: THREE.ImageUtils.loadTexture(
+              "textures/helmet/Mandalorian_Helmet_Normal.png"
+            )
+          },
+          u_DiffuseEnvSampler: {
+            value: textureCube
+          },
+          u_brdfLUT: {
+            type: "t",
+            value: THREE.ImageUtils.loadTexture(
+              "textures/environment/brdfLUT.png"
+            )
+          },
+          u_MetallicRoughnessValues: {
+            value: 1.0
+          },
+          u_PerceptualRoughness: {
+            value: 1.0
+          },
+          u_LightColor: {
+            value: [1, 1, 1]
+          }
+        };
+        var material = new THREE.ShaderMaterial({
+          uniforms: uniforms,
+          vertexShader: vert,
+          fragmentShader: frag,
+          extensions: {
+            derivatives: true
+          }
+        });
+
+        var loader = new THREE.OBJLoader();
+        loader.load("models/helmet.obj", function(object) {
+          object.traverse(function(child) {
+            if (child instanceof THREE.Mesh) {
+              child.material = material;
+              child.y -= 100;
+            }
+          });
+
+          scene.add(object);
+          onWindowResize();
+        });
+
+        renderer = new THREE.WebGLRenderer({ antialias: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        container = document.getElementById("container");
+        container.appendChild(renderer.domElement);
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+        render();
+      }
+
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        render();
+      }
+
+      function render() {
+        renderer.render(scene, camera);
+      }
+    </script>
+  </body>
+</html>
