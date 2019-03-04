@@ -25,6 +25,7 @@ const vec3 lightColor = vec3(1., 1., 1.);
 const vec3 lightDirection = vec3(0., 1., 0.5);
 const float IBLScale = 0.1;
 const float normalScale = 1.0;
+const float reflectionMIPS  = 2.0;
 // Encapsulate the various inputs used by the various functions in the shading equation
 // We store values in this struct to simplify the integration of alternative implementations
 // of the shading terms, outlined in the Readme.MD Appendix.
@@ -80,13 +81,15 @@ vec3 getNormal()
 // See our README.md on Environment Maps [3] for additional discussion.
 vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection)
 {
-    float mipCount = 2.0;
-    float lod = (pbrInputs.perceptualRoughness * mipCount);
+    vec3 reflectedNormal = normalize(reflect(vViewDir, n));
+    reflectedNormal.x *= -1.0;
+    reflectedNormal = n ;
+    float lod = (pbrInputs.perceptualRoughness * reflectionMIPS);
     // retrieve a scale and bias to F0. See [1], Figure 3
     vec3 brdf = SRGBtoLINEAR(texture2D(u_brdfLUT, vec2(pbrInputs.NdotV, 1.0 - pbrInputs.perceptualRoughness))).rgb;
 
-     vec3 specularLight = SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, n)).rgb;
-     vec3 diffuseLight = SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, n)).rgb;
+     vec3 specularLight = SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, reflectedNormal)).rgb;
+     vec3 diffuseLight = SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, reflectedNormal)).rgb;
 
 
     vec3 diffuse = diffuseLight * pbrInputs.diffuseColor * 2.0;
@@ -149,10 +152,10 @@ void main()
     // Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
     // This layout intentionally reserves the 'r' channel for (optional) occlusion map data
     vec4 roughnessSample = texture2D(u_MetallicRoughnessSampler, v_UV);
-    float roughnessValue = (roughnessSample.r + roughnessSample.b + roughnessSample.b) / 3.0;
+    float roughnessValue = (roughnessSample.r + roughnessSample.g + roughnessSample.b) / 3.0;
    
     vec4 metallicSample = texture2D(u_MetalnessSampler, v_UV);
-    float metallicValue = (metallicSample.r + metallicSample.b + metallicSample.b) / 3.0;
+    float metallicValue = (metallicSample.r + metallicSample.g + metallicSample.b) / 3.0;
     
     perceptualRoughness = roughnessValue * perceptualRoughness;
     metallic = metallicValue * metallic;
@@ -215,13 +218,13 @@ void main()
 
     // Calculation of analytical lighting contribution
     vec3 diffuseContrib = (1.0 - F) * diffuse(pbrInputs);
-   //  diffuseContrib = diffuse(pbrInputs);
-    vec3 specContrib = F * G * D / (4.0 * NdotL * NdotV);
+    float spec = 4.0;
+    vec3 specContrib = F * G * D / (spec * NdotL * NdotV);
     // Obtain final intensity as reflectance (BRDF) scaled by the energy of the light (cosine law)
-    vec3 color = NdotL * lightColor * (diffuseContrib + specContrib); 
+    vec3 color = NdotL * lightColor * (diffuseContrib + specContrib);    
     vec3 IBLColor = getIBLContribution(pbrInputs, n, reflection);
     color += IBLColor;
-    vec3 ambient = diffuseColor * 0.45;
+    vec3 ambient = diffuseColor * 0.55;
     color += ambient;
     gl_FragColor = vec4(pow(color,vec3(1.0/2.2)), baseColor.a);
 }
