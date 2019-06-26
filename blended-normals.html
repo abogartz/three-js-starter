@@ -1,207 +1,241 @@
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
     <title>Blended Normals</title>
 
     <script src="http://threejs.org/build/three.js"></script>
-    <script src="js/OBJLoader.js"></script>`
+    <script src="js/OBJLoader.js"></script>
+    `
+    <script src="js/ktx-loader.js"></script>
+    `
     <script src="js/controls.js"></script>
     <style media="screen">
-        body {
-            overflow: hidden;
-        }
+      body {
+        overflow: hidden;
+      }
 
-        pre {
-            display: none;
-        }
+      pre {
+        display: none;
+      }
 
-        #container {
-            width: 500px;
-            height: 500px;
-        }
+      #container {
+        width: 500px;
+        height: 500px;
+      }
     </style>
-</head>
+  </head>
 
-<body>
-    <section id='container'>
-    </section>
+  <body>
+    <section id="container"></section>
 
+    <script id="vertexShader" type="x-shader/x-vertex">
+      varying vec2 vUv;
+      varying vec3 normalInterp;
+      varying vec3 vertPos;
 
-    <script id='vertexShader' type='x-shader/x-vertex'>
-        varying vec2 vUv;
-        varying vec3 normalInterp;
-        varying vec3 vertPos;
+      void main() {
+          vUv = uv;
 
-        void main() {
-            vUv = uv;
-
-            vec4 vertPos4 = modelViewMatrix * vec4(position, 1.0);
-            vertPos = vec3(vertPos4) / vertPos4.w;
-            normalInterp = normalMatrix * normal;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
+          vec4 vertPos4 = modelViewMatrix * vec4(position, 1.0);
+          vertPos = vec3(vertPos4) / vertPos4.w;
+          normalInterp = normalMatrix * normal;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
     </script>
 
-    <script id='fragmentShader' type='x-shader/x-fragment'>
-        // Inputs        
-        uniform sampler2D uTexture;
-        uniform sampler2D uNormal1;
-        uniform sampler2D uNormal2;
-        uniform sampler2D uSpec;
-        uniform sampler2D uDecal;
+    <script id="fragmentShader" type="x-shader/x-fragment">
+      // Inputs
+      uniform sampler2D uTexture;
+      uniform sampler2D uNormal1;
+      uniform sampler2D uNormal2;
+      uniform sampler2D uSpec;
+      uniform sampler2D uDecal;
 
-        varying vec2 vUv;
-        varying vec3 normalInterp;
-        varying vec3 vertPos;
+      varying vec2 vUv;
+      varying vec3 normalInterp;
+      varying vec3 vertPos;
 
-        // Constants
-        const vec3 lightPos 	= vec3(200,200,100);
-        const vec3 ambientColor = vec3(0.1, .1, .1);
-        const vec3 specColor 	= vec3(1.0, 1.0, 1.0);
+      // Constants
+      const vec3 lightPos 	= vec3(200,200,100);
+      const vec3 ambientColor = vec3(0.1, .1, .1);
+      const vec3 specColor 	= vec3(1.0, 1.0, 1.0);
 
-        // Function for calculating normal maps
-        vec3 perturbNormal( vec3 eye_pos, vec3 surf_norm, vec2 uv_coords, vec3 normal_perturbation ) {
-            vec3 q0 = dFdx( eye_pos.xyz );
-            vec3 q1 = dFdy( eye_pos.xyz );
-            vec2 st0 = dFdx( uv_coords.st );
-            vec2 st1 = dFdy( uv_coords.st );
+      // Function for calculating normal maps
+      vec3 perturbNormal( vec3 eye_pos, vec3 surf_norm, vec2 uv_coords, vec3 normal_perturbation ) {
+          vec3 q0 = dFdx( eye_pos.xyz );
+          vec3 q1 = dFdy( eye_pos.xyz );
+          vec2 st0 = dFdx( uv_coords.st );
+          vec2 st1 = dFdy( uv_coords.st );
 
-            vec3 S = normalize( q0 * st1.t - q1 * st0.t );
-            vec3 T = normalize( -q0 * st1.s + q1 * st0.s );
-            vec3 N = normalize( surf_norm );
+          vec3 S = normalize( q0 * st1.t - q1 * st0.t );
+          vec3 T = normalize( -q0 * st1.s + q1 * st0.s );
+          vec3 N = normalize( surf_norm );
 
-            mat3 tsn = mat3( S, T, N );
-            return normalize( tsn * normal_perturbation );
-        }
+          mat3 tsn = mat3( S, T, N );
+          return normalize( tsn * normal_perturbation );
+      }
 
-        vec3 blend_rnm_unpacked(vec3 n1, vec3 n2)
-        {
-            vec3 t = n1.xyz + vec3( 0.0,  0.0, 1.0);
-            vec3 u = n2.xyz * vec3(-1.0, -1.0, 1.0);
-            vec3 r = (t/t.z) * dot(t, u) - u;
+      vec3 blend_rnm_unpacked(vec3 n1, vec3 n2)
+      {
+          vec3 t = n1.xyz + vec3( 0.0,  0.0, 1.0);
+          vec3 u = n2.xyz * vec3(-1.0, -1.0, 1.0);
+          vec3 r = (t/t.z) * dot(t, u) - u;
 
-            return r;
-        }
-        vec3 blend_unity(vec3 n1, vec3 n2) {
-            mat3 nBasis = mat3(
-                vec3(n1.z, n1.y, -n1.x), // +90 degree rotation around y axis
-                vec3(n1.x, n1.z, -n1.y), // -90 degree rotation around x axis
-                vec3(n1.x, n1.y,  n1.z));
-            return normalize(n2.x*nBasis[0] + n2.y*nBasis[1] + n2.z*nBasis[2]);
-        }
-        void main() {
-            vec3 normal = normalize(normalInterp);
-            vec3 viewDir = normalize(-vertPos);
-            vec3 n;
-            vec3 n1 = texture2D(uNormal1,vUv * 5.).xyz;
-            vec3 n2 = texture2D(uNormal2, fract(vUv * 10. )).xyz;
-            vec2 decalUvs = vUv * 10.5;
-            decalUvs = vec2(decalUvs - vec2(0.1, 0.1));
-            vec3 n3 = texture2D(uDecal, decalUvs).xyz;
-            // n = blend_rnm_unpacked(n3 * vec3( 2,  2, 2) + vec3(-1, -1,  0), n1 * vec3(2, 2, 2) + vec3( -1,  -1, 0));
-            n = blend_unity(n1, n2);///blend_rnm_unpacked(n1 * vec3( 2,  2, 2) + vec3(-1, -1,  0), n2 * vec3(2, 2, 2) + vec3( 1,  1, 0));
-          //  if (decalUvs.x < 0.0 || decalUvs.x > 1.0 || decalUvs.y < 0.0 || decalUvs.y > 1.0) {
-               // n = blend_rnm_unpacked(n, n2);
-           // } else {
-               //  n = blend_rnm_unpacked(n1, n2);
-           // }
-           n = blend_unity(n1.xyz*vec3( 2,  2, 2) + vec3(-1, -1,  0), n2.xyz * vec3(2, 2, 2) + vec3( -1,  -1, 0));
-           n = blend_unity(n, n3.xyz * vec3(2, 2, 2) + vec3( -1,  -1, 0));
-            normal = perturbNormal(vertPos, normal, vUv, n);
+          return r;
+      }
+      vec3 blend_unity(vec3 n1, vec3 n2) {
+          mat3 nBasis = mat3(
+              vec3(n1.z, n1.y, -n1.x), // +90 degree rotation around y axis
+              vec3(n1.x, n1.z, -n1.y), // -90 degree rotation around x axis
+              vec3(n1.x, n1.y,  n1.z));
+          return normalize(n2.x*nBasis[0] + n2.y*nBasis[1] + n2.z*nBasis[2]);
+      }
+      void main() {
+          vec3 normal = normalize(normalInterp);
+          vec3 viewDir = normalize(-vertPos);
+          vec3 n;
+          vec3 n1 = texture2D(uNormal1,vUv * 5.).xyz;
+          vec3 n2 = texture2D(uNormal2, fract(vUv * 10. )).xyz;
+          vec2 decalUvs = vUv * 10.5;
+          decalUvs = vec2(decalUvs - vec2(0.1, 0.1));
+          vec3 n3 = texture2D(uDecal, decalUvs).xyz;
+          // n = blend_rnm_unpacked(n3 * vec3( 2,  2, 2) + vec3(-1, -1,  0), n1 * vec3(2, 2, 2) + vec3( -1,  -1, 0));
+          n = blend_unity(n1, n2);///blend_rnm_unpacked(n1 * vec3( 2,  2, 2) + vec3(-1, -1,  0), n2 * vec3(2, 2, 2) + vec3( 1,  1, 0));
+        //  if (decalUvs.x < 0.0 || decalUvs.x > 1.0 || decalUvs.y < 0.0 || decalUvs.y > 1.0) {
+             // n = blend_rnm_unpacked(n, n2);
+         // } else {
+             //  n = blend_rnm_unpacked(n1, n2);
+         // }
+         n = blend_unity(n1.xyz*vec3( 2,  2, 2) + vec3(-1, -1,  0), n2.xyz * vec3(2, 2, 2) + vec3( -1,  -1, 0));
+         n = blend_unity(n, n3.xyz * vec3(2, 2, 2) + vec3( -1,  -1, 0));
+          normal = perturbNormal(vertPos, normal, vUv, n);
 
-            vec3 lightDir = normalize(lightPos - vertPos);
+          vec3 lightDir = normalize(lightPos - vertPos);
 
-            float lambertian = max(dot(lightDir,normal), 0.0);
+          float lambertian = max(dot(lightDir,normal), 0.0);
 
-            lightDir = normalize(-lightPos - vertPos);
-            lambertian += max(dot(lightDir,normal), 0.0);
-            float specular = 0.0;
-            if(lambertian > 0.0) {
+          lightDir = normalize(-lightPos - vertPos);
+          lambertian += max(dot(lightDir,normal), 0.0);
+          float specular = 0.0;
+          if(lambertian > 0.0) {
 
-                // Calculate fresnel value 
+              // Calculate fresnel value
 
-                vec3 halfDir = normalize(lightDir + viewDir);
-                float specAngle = max(dot(halfDir, normal), 0.0);
-                specular = pow(specAngle, 16.0);
+              vec3 halfDir = normalize(lightDir + viewDir);
+              float specAngle = max(dot(halfDir, normal), 0.0);
+              specular = pow(specAngle, 16.0);
 
-                halfDir = normalize(-lightDir + viewDir);
-                specAngle = max(dot(halfDir, normal), 0.0);
-                specular += pow(specAngle, 16.0);
-                vec3 specularColor = texture2D(uSpec, fract(vUv * 10.)).rgb;
-                specular = specular * (specularColor.r +specularColor.g +specularColor.b) / 3.0 ;
-            }
+              halfDir = normalize(-lightDir + viewDir);
+              specAngle = max(dot(halfDir, normal), 0.0);
+              specular += pow(specAngle, 16.0);
+              vec3 specularColor = texture2D(uSpec, fract(vUv * 10.)).rgb;
+              specular = specular * (specularColor.r +specularColor.g +specularColor.b) / 3.0 ;
+          }
 
-            vec3 diffuseColor = texture2D(uTexture, fract(vUv * 10.)).rgb * vec3(1.0, 0.6, .2);
-            gl_FragColor = vec4(ambientColor + lambertian * diffuseColor + specular, 1.0);
-            //gl_FragColor = vec4(vec3(lambertian), 1.0);
-        }
-    
+          vec3 diffuseColor = texture2D(uTexture, fract(vUv * 10.)).rgb * vec3(1.0, 0.6, .2);
+          gl_FragColor = vec4(ambientColor + lambertian * diffuseColor + specular, 1.0);
+          //gl_FragColor = vec4(vec3(lambertian), 1.0);
+      }
     </script>
 
     <script>
-        var container, camera, scene, renderer, uniforms;
+      var container, camera, scene, renderer, uniforms;
 
-        init();
-        animate();
-        function init() {
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
-            camera.position.z = 20;
-            controls = new THREE.OrbitControls(camera);
-            scene = new THREE.Scene();
+      const init = async () => {
+        renderer = new THREE.WebGLRenderer({ antialias: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        // var formats = {
+        //   s3tc: renderer.extensions.get("WEBGL_compressed_texture_s3tc")
+        // };
 
-            uniforms = {
-                uTexture: { type: "t", value: THREE.ImageUtils.loadTexture("textures/mesh-diffuse.png") },
-                uNormal1: { type: "t", value: THREE.ImageUtils.loadTexture("textures/box-normal.jpg") },
-                uNormal2: { type: "t", value: THREE.ImageUtils.loadTexture("textures/mesh-normal.png") },
-                uSpec: { type: "t", value: THREE.ImageUtils.loadTexture("textures/mesh-spec.png") },
-                uDecal: { type: "t", value: THREE.ImageUtils.loadTexture("textures/square-graphic-normal.png") }
-            };
+        const ktxLoader = new THREE.KTXLoader();
+        camera = new THREE.PerspectiveCamera(
+          60,
+          window.innerWidth / window.innerHeight,
+          1,
+          10000
+        );
+        camera.position.z = 20;
+        controls = new THREE.OrbitControls(camera);
+        scene = new THREE.Scene();
+        uniforms = {
+          uTexture: {
+            type: "t",
+            value: await ktxLoader.load("textures/brick.ktx")
+          },
+          uNormal1: {
+            type: "t",
+            value: await ktxLoader.load("textures/box-normal.ktx")
+          },
+          uNormal2: {
+            type: "t",
+            value: await ktxLoader.load("textures/mesh-normal.ktx")
+          },
+          uSpec: {
+            type: "t",
+            value: await ktxLoader.load("textures/mesh-spec.ktx")
+          },
+          uDecal: {
+            type: "t",
+            value: await ktxLoader.load("textures/square-graphic-normal.ktx")
+          }
+        };
 
-            uniforms.uTexture.value.wrapS = uniforms.uTexture.value.wrapT = THREE.RepeatWrapping;
-            uniforms.uNormal1.value.wrapS = uniforms.uNormal1.value.wrapT = THREE.RepeatWrapping;
-            uniforms.uNormal2.value.wrapS = uniforms.uNormal2.value.wrapT = THREE.RepeatWrapping;
-            uniforms.uSpec.value.wrapS = uniforms.uSpec.value.wrapT = THREE.RepeatWrapping;
-            uniforms.uDecal.value.wrapS = uniforms.uDecal.value.wrapT = THREE.RepeatWrapping;
-            var material = new THREE.ShaderMaterial({
-                uniforms: uniforms,
-                vertexShader: document.getElementById('vertexShader').textContent,
-                fragmentShader: document.getElementById('fragmentShader').textContent,
-                extensions: {
-                    derivatives: true,
-                }
-            });
+        uniforms.uTexture.value.wrapS = uniforms.uTexture.value.wrapT =
+          THREE.RepeatWrapping;
+        uniforms.uNormal1.value.wrapS = uniforms.uNormal1.value.wrapT =
+          THREE.RepeatWrapping;
+        uniforms.uNormal2.value.wrapS = uniforms.uNormal2.value.wrapT =
+          THREE.RepeatWrapping;
+        uniforms.uSpec.value.wrapS = uniforms.uSpec.value.wrapT =
+          THREE.RepeatWrapping;
+        uniforms.uDecal.value.wrapS = uniforms.uDecal.value.wrapT =
+          THREE.RepeatWrapping;
+        var material = new THREE.ShaderMaterial({
+          uniforms: uniforms,
+          vertexShader: document.getElementById("vertexShader").textContent,
+          fragmentShader: document.getElementById("fragmentShader").textContent,
+          extensions: {
+            derivatives: true
+          }
+        });
 
-            var geometry = new THREE.SphereGeometry(3, 50, 50, 0, Math.PI * 2, 0, Math.PI * 2);
-            var sphere = new THREE.Mesh(geometry, material);
-            scene.add(sphere);
+        var geometry = new THREE.SphereGeometry(
+          3,
+          50,
+          50,
+          0,
+          Math.PI * 2,
+          0,
+          Math.PI * 2
+        );
+        var sphere = new THREE.Mesh(geometry, material);
+        scene.add(sphere);
 
-            renderer = new THREE.WebGLRenderer({ antialias: false });
-            renderer.setSize(window.innerWidth, window.innerHeight);
+        container = document.getElementById("container");
+        container.appendChild(renderer.domElement);
+      };
 
-            container = document.getElementById('container');
-            container.appendChild(renderer.domElement);
-        }
+      function animate() {
+        requestAnimationFrame(animate);
+        render();
+      }
 
-        function animate() {
-            requestAnimationFrame(animate);
-            render();
-        }
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        render();
+      }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            render();
-        }
+      function render() {
+        renderer.render(scene, camera);
+      }
 
-        function render() {
-            renderer.render(scene, camera);
-        }
-
+      init();
+      animate();
     </script>
-</body>
-
+  </body>
 </html>
